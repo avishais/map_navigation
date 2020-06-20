@@ -39,7 +39,7 @@ class RRT:
         def coord(self):
             print("Position <%d,%d>"%(self.x,self.y))
 
-    def __init__(self, start, goal, Map,
+    def __init__(self, Map,
                  expand_dis=1.0, path_resolution=0.5, goal_sample_rate=5, max_iter=10500):
         """
         Setting Parameter
@@ -49,8 +49,6 @@ class RRT:
         Map:obstacle Positions [[x,y,size],...]
 
         """
-        self.start = self.Node(start[0], start[1])
-        self.end = self.Node(goal[0], goal[1])
         self.expand_dis = expand_dis
         self.path_resolution = path_resolution
         self.goal_sample_rate = goal_sample_rate
@@ -60,12 +58,15 @@ class RRT:
         self.nrows = self.Map.shape[0]
         self.ncols = self.Map.shape[1]
 
-    def planning(self, animation=True):
+    def plan(self, start, goal, animation=True):
         """
         rrt path planning
 
         animation: flag for animation on or off
         """
+        self.start = self.Node(start[0], start[1])
+        self.end = self.Node(goal[0], goal[1])
+        self.node_list = []
 
         self.node_list = [self.start]
         for i in range(self.max_iter):
@@ -138,7 +139,7 @@ class RRT:
             rnd = self.Node(self.end.x, self.end.y)
         return rnd
 
-    def draw_graph(self, rnd=None, path = None):
+    def draw_graph(self, rnd=None, path = None, stop = True):
         row_labels = range(self.nrows)
         col_labels = range(self.ncols)
 
@@ -167,10 +168,11 @@ class RRT:
         plt.xlabel('y')
         plt.ylabel('x')
 
-        if path is not None:
+        if path is not None and stop:
             plt.plot([y for (x, y) in path], [x for (x, y) in path], '-r')
             plt.show()
-        else:
+        elif path is not None:
+            plt.plot([y for (x, y) in path], [x for (x, y) in path], '-r')
             plt.pause(0.01)
 
     def check_collision(self, node):
@@ -239,10 +241,8 @@ def main():
         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
 
-    rrt = RRT(start=[0, 0],
-              goal=[0,19],
-              Map=Map)
-    sol = rrt.planning(animation=show_animation)
+    rrt = RRT(Map=Map)
+    sol = rrt.plan(start=[0, 0], goal=[0,19], animation=show_animation)
     path = sol['path']
     actions = sol['actions']
     print(path, actions)

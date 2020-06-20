@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 
 from rrt import RRT
 
-show_animation = False
+show_animation = True
 
 class RRTStar(RRT):
     """
@@ -35,7 +35,7 @@ class RRTStar(RRT):
         def coord(self):
             print("Position <%d,%d>, cost: %d."%(self.x,self.y, self.cost))
 
-    def __init__(self, start, goal, Map,
+    def __init__(self, Map,
                  expand_dis=1.0,
                  path_resolution=1.0,
                  goal_sample_rate=20,
@@ -43,7 +43,7 @@ class RRTStar(RRT):
                  connect_circle_dist=1.0,
                  verbose = False
                  ):
-        super().__init__(start, goal, Map, expand_dis, path_resolution, goal_sample_rate, max_iter)
+        super().__init__(Map, expand_dis, path_resolution, goal_sample_rate, max_iter)
         """
         Setting Parameter
 
@@ -51,21 +51,27 @@ class RRTStar(RRT):
         goal:Goal Position [x,y]
         obstacleList:obstacle Positions [[x,y,size],...]
         """
+        self.set_cost_func()
         self.connect_circle_dist = connect_circle_dist
-        self.goal_node = self.Node(goal[0], goal[1])
         self.best_cost = np.Inf
         self.list_size = 0
         self.count_convrg = 0
         self.verbose = verbose
 
-
-    def planning(self, animation=True, search_until_max_iter=True):
+    def plan(self, start, goal, animation=True, search_until_max_iter=True):
         """
         rrt star path planning
 
         animation: flag for animation on or off
         search_until_max_iter: search until max iteration for path improving or not
         """
+        self.start = self.Node(start[0], start[1])
+        self.end = self.Node(goal[0], goal[1])
+        self.goal_node = self.Node(goal[0], goal[1])
+        self.node_list = []
+        self.best_cost = np.Inf
+        self.list_size = 0
+        self.count_convrg = 0
 
         self.node_list = [self.start]
         for i in range(self.max_iter):
@@ -80,6 +86,9 @@ class RRTStar(RRT):
                     self.list_size = len(self.node_list)
                 elif best_cost_so_far is not np.Inf:
                     self.count_convrg += 1
+
+            if i % 1000 == 0:
+                self.rewire_all()
 
             if self.verbose:
                 print("Iter:", i, ", number of nodes:", len(self.node_list), ", best cost: ", self.best_cost+2)
@@ -96,17 +105,24 @@ class RRTStar(RRT):
                     self.rewire(new_node, near_inds, rewire_near = False)
 
             if animation and i % 100 == 0:
-                self.draw_graph(rnd)
-
-            if ((not search_until_max_iter) and new_node) or self.count_convrg > 500:  # check reaching the goal
                 last_index = self.search_best_goal_node()
                 if last_index:
+                    sol = self.generate_final_course(last_index)
+                    self.draw_graph(rnd, path = sol['path'], stop = False)
+                else:
+                    self.draw_graph(rnd)
+
+            if ((not search_until_max_iter) and new_node):# or self.count_convrg > 500:  # check reaching the goal
+                last_index = self.search_best_goal_node()
+                if last_index:
+                    print("Found path with cost %f."%self.node_list[last_index].cost)
                     return self.generate_final_course(last_index)
 
         print("reached max iteration")
 
         last_index = self.search_best_goal_node()
         if last_index:
+            print("Found path with cost %f."%self.node_list[last_index].cost)
             return self.generate_final_course(last_index)
 
         return None
@@ -196,8 +212,18 @@ class RRTStar(RRT):
         best_cost = self.node_list[last_index].cost 
         print("Rewired all with cost from %d to %d."%(best_cost_so_far, best_cost))
 
-    def calc_new_cost(self, from_node, to_node):
+    def cost(self, from_node, to_node):
         d, _ = self.calc_distance_and_angle(from_node, to_node)
+        return d
+
+    def set_cost_func(self, cost_func = None):
+        if cost_func is None:
+            self.cost_func = self.cost
+        else:
+            self.cost_func = cost_func
+
+    def calc_new_cost(self, from_node, to_node):
+        d = self.cost_func(from_node, to_node)
         return from_node.cost + d
 
     def propagate_cost_to_leaves(self, parent_node):
@@ -206,6 +232,10 @@ class RRTStar(RRT):
             if node.parent == parent_node:
                 node.cost = self.calc_new_cost(parent_node, node)
                 self.propagate_cost_to_leaves(node)
+
+
+def alt_cost(from_node, to_node):
+    return (to_node.x-17)**2/10
 
 
 def main():
@@ -218,8 +248,8 @@ def main():
         [0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 1],
+        [0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 1],
         [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0],
         [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0],
         [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0],
@@ -235,10 +265,9 @@ def main():
         [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
 
     # Set Initial parameters
-    rrt_star = RRTStar(start=[0, 0],
-                    goal=[0,19],
-                    Map=Map)
-    sol = rrt_star.planning(animation=show_animation)
+    rrt_star = RRTStar(Map=Map)
+    rrt_star.set_cost_func(alt_cost)
+    sol = rrt_star.plan(start=[0, 0], goal=[0,19], animation=show_animation)
     path = sol['path']
     actions = sol['actions']
     print(path, actions)
