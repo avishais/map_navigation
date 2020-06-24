@@ -7,7 +7,7 @@ from rrtstar import RRTStar
 
 
 class Env(RRTStar):
-    num_obs = 5
+    num_obs = 20
     D = {'u': np.array([-1,0]), 'd': np.array([1,0]), 'r': np.array([0,1]), 'l': np.array([0,-1])}#, 'f': np.array([0, 0])}
     alpha = 1.0
 
@@ -17,9 +17,10 @@ class Env(RRTStar):
         self.env = np.ones((self.nrows, self.ncols))
         self.prob_map = np.zeros((self.nrows, self.ncols)) + 1./self.num_free_cells
         self.obs_map = np.zeros((self.nrows, self.ncols))
-        self.score_map = np.ones((self.nrows, self.ncols))
+        self.score_map = np.ones((self.nrows, self.ncols))*10.0
         self.path = []
         self.path.append(loc)
+        self.path_ends = []
 
         self.set_obs()
         # self.Map = np.copy(self.obs_map)
@@ -55,8 +56,10 @@ class Env(RRTStar):
         for d in self.direc_prob.keys():
             self.direc_prob[d] /= self.num_free_cells
 
-        for x in range(self.ncols):
-            for y in range(self.nrows):
+        w = 7.0 # wall value
+        self.score_map[:,0] = self.score_map[:,-1] = self.score_map[0,:] = self.score_map[-1,:] = w
+        for x in range(1, self.ncols-1):
+            for y in range(1, self.nrows-1):
                 if self.obs_map[x,y]:
                     self.score_map[x, y] = 100
                     continue
@@ -147,7 +150,7 @@ class Env(RRTStar):
         return (1 - self.alpha) * self.score_map[x[0], x[1]] + self.alpha * 1.0
 
     def cost_score(self, from_node, to_node):
-        self.alpha = 0.0#np.maximum(self.get_max_prob(), 0.1)
+        self.alpha = np.maximum(self.get_max_prob(), 0.1)
         return (1 - self.alpha) * self.score_map[to_node.x, to_node.y] + self.alpha * 1.0
 
     def sample_state_distribution(self):
@@ -161,8 +164,10 @@ class Env(RRTStar):
         np.random.seed(1)
         return coor
 
-    def plot(self, map = False, P = []):
-        if map:
+    def plot(self, path_map = False, heat_map = True, P = [], stop = True, external_path = None):
+        if path_map:
+            plt.figure(num = 1, clear = True)
+            # plt.clf()
             row_labels = range(self.nrows)
             col_labels = range(self.ncols)
 
@@ -170,7 +175,9 @@ class Env(RRTStar):
             for x, p in zip(path, P):
                 self.env[x[0], x[1]] = 0.6*p+0.2
 
-            plt.matshow(self.env, cmap='gray',vmin=0,vmax=1)
+            self.path_ends.append(path[-1,:])
+
+            plt.matshow(self.env, cmap='gray',vmin = 0, vmax = 1, fignum = 1)
             for ir in row_labels:
                 plt.plot([-0.5, self.ncols-0.5], [ir-0.5, ir-0.5], '-k', linewidth = 1)
             for ir in col_labels:
@@ -180,25 +187,33 @@ class Env(RRTStar):
             plt.plot(path[:,1], path[:,0], '.-r')
             plt.plot(path[0,1], path[0,0], 'pg')
             plt.plot(path[-1,1], path[-1,0], 'ob')
+            plt.plot(np.array(self.path_ends)[:,1], np.array(self.path_ends)[:,0], 'om')
+            if external_path is not None:
+                plt.plot(external_path[:,1], external_path[:,0], '.:g')
             plt.xticks(range(self.nrows), col_labels)
             plt.yticks(range(self.nrows), row_labels)
             plt.xlabel('y')
             plt.ylabel('x')
+            
 
-        plt.figure()
-        # self.prob_map = np.ma.masked_where(self.prob_map < 0., self.prob_map)
-        cmap = plt.cm.OrRd
-        # cmap.set_under(color='black')  
-        # cmap.set_bad(color='black')
+        if heat_map:
+            plt.figure(2)
+            # self.prob_map = np.ma.masked_where(self.prob_map < 0., self.prob_map)
+            cmap = plt.cm.OrRd
+            # cmap.set_under(color='black')  
+            # cmap.set_bad(color='black')
 
-        cax = plt.imshow(self.prob_map, cmap=cmap, vmin=0, vmax=np.max(self.prob_map), interpolation='nearest') #cmap=plt.cm.bone
-        plt.colorbar(cax)
-        plt.plot(path[:,1], path[:,0], '.-k')
-        plt.plot(path[-1,1], path[-1,0], 'ok')
-        plt.xlabel('y')
-        plt.ylabel('x')
+            cax = plt.imshow(self.prob_map, cmap=cmap, vmin=0, vmax=np.max(self.prob_map), interpolation='nearest') #cmap=plt.cm.bone
+            plt.colorbar(cax)
+            plt.plot(path[:,1], path[:,0], '.-k')
+            plt.plot(path[-1,1], path[-1,0], 'ok')
+            plt.xlabel('y')
+            plt.ylabel('x')
 
-        plt.show()
+        if stop:
+            plt.show()
+        else:
+            plt.pause(0.01)
 
 
 # E = Env(20, 20)

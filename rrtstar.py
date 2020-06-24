@@ -42,7 +42,7 @@ class RRTStar(RRT):
                  goal_sample_rate=20,
                  max_iter=20000,
                  connect_circle_dist=1.0,
-                 verbose = True
+                 verbose = False
                  ):
         super().__init__(Map, expand_dis, path_resolution, goal_sample_rate, max_iter)
         """
@@ -59,7 +59,7 @@ class RRTStar(RRT):
         self.count_convrg = 0
         self.verbose = verbose
 
-    def plan(self, start, goal, animation=True, search_until_max_iter=True):
+    def plan(self, start, goal, animation=show_animation, search_until_max_iter=True):
         """
         rrt star path planning
 
@@ -88,8 +88,10 @@ class RRTStar(RRT):
                 elif best_cost_so_far is not np.Inf:
                     self.count_convrg += 1
 
-            if self.count_convrg > 0 and self.count_convrg % 1000 == 0:# i % 1000 == 0:
-                self.rewire_all(prob = 1.0)
+            if self.count_convrg > 0 and self.count_convrg % 500 == 0:# i % 1000 == 0:
+                self.rewire_all(prob = 0.3)
+                if animation:
+                    self.animate(rnd)
 
             if self.verbose:
                 print("Iter:", i, ", number of nodes:", len(self.node_list), ", best cost: ", self.best_cost+2)
@@ -116,15 +118,10 @@ class RRTStar(RRT):
                     self.node_list.append(new_node)
                     self.rewire(new_node, near_inds)
                         
-            if animation and i % 100 == 0:
-                last_index = self.search_best_goal_node()
-                if last_index:
-                    sol = self.generate_final_course(last_index)
-                    self.plot_plan(rnd, path = sol['path'], stop = False)
-                else:
-                    self.plot_plan(rnd)
-
-            if ((not search_until_max_iter) and new_node) or self.count_convrg > 6000:  # check reaching the goal
+            if animation and i % 200 == 0:
+                self.animate(rnd)
+                
+            if ((not search_until_max_iter) and new_node) or self.count_convrg > 500:  # check reaching the goal
                 self.rewire_all(prob = 1.0)
                 last_index = self.search_best_goal_node()
                 if last_index:
@@ -138,7 +135,6 @@ class RRTStar(RRT):
         if last_index:
             print("Found path with cost %f."%self.node_list[last_index].cost)
             return self.generate_final_course(last_index)
-
         return None
 
     def choose_parent(self, new_node, near_inds):
@@ -166,6 +162,14 @@ class RRTStar(RRT):
         new_node.cost = min_cost
 
         return new_node
+
+    def animate(self, rnd = None):
+        last_index = self.search_best_goal_node()
+        if last_index:
+            sol = self.generate_final_course(last_index)
+            self.plot_plan(rnd, path = sol['path'], stop = False)
+        else:
+            self.plot_plan(rnd)
 
     def check_exist(self, new_node):
         for i, n in enumerate(self.node_list):
@@ -233,7 +237,8 @@ class RRTStar(RRT):
         if not last_index:
             return
         best_cost_so_far = self.node_list[last_index].cost 
-        print("Rewiring all...")
+        if self.verbose:
+            print("Rewiring all...")
 
         for i, node in enumerate(self.node_list):
             if np.random.rand() < prob:
@@ -247,7 +252,8 @@ class RRTStar(RRT):
 
         last_index = self.search_best_goal_node()
         best_cost = self.node_list[last_index].cost 
-        print("Rewired all with cost from %f to %f."%(best_cost_so_far, best_cost))
+        if self.verbose:
+            print("Rewired all with cost from %f to %f."%(best_cost_so_far, best_cost))
 
     def cost(self, from_node, to_node):
         d, _ = self.calc_distance_and_angle(from_node, to_node)
@@ -278,7 +284,7 @@ class RRTStar(RRT):
 
 
 def alt_cost(from_node, to_node):
-    return (to_node.x-17)**2/10
+    return (to_node.x-12)**2/10
 
 
 def main():

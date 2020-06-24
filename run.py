@@ -7,19 +7,19 @@ E = Env(30, 30)
 x_start = np.array([28, 27])# E.gen_random_state()
 x_goal = np.array([3, 2])# E.gen_random_state()
 E.set_start_state(x_start)
-E.set_g_func(E.cost_score)
 # E.plot(True)
 
-sol = E.plan(x_start, x_goal)
-path = sol['path']
-E.plot_plan(path = path)
-exit(1)
+# sol = E.plan(x_start, x_goal, animation = False)
+# path = sol['path']
+# E.plot_plan(path = path)
+# exit(1)
 
 x_current = np.copy(x_start) # The real current state but unknown
 actions_prev = []
 P = []
 count_plans = 0
 while not np.all(x_current == x_goal) or E.get_max_prob() < 1.0:
+    E.set_g_func(E.cost_score)
     p_max = E.get_max_prob()
     print("Max probability: ", p_max)
 
@@ -27,7 +27,7 @@ while not np.all(x_current == x_goal) or E.get_max_prob() < 1.0:
     x_belief = E.sample_state_distribution()
     print("x_belief: ", x_belief, "x_real: ", x_current)
     print("Planning...")
-    sol = E.plan(x_belief, x_goal)
+    sol = E.plan(x_belief, x_goal, animation = False)
     count_plans += 1
     if sol:
         path = sol['path']
@@ -51,6 +51,7 @@ while not np.all(x_current == x_goal) or E.get_max_prob() < 1.0:
         S = E.sense(x_current)
         print("Senses %d obstacles." % len(S))
 
+    E.plot(path_map = True, heat_map = False, stop = False, external_path = np.array(path))
     actions_prev = actions.copy()
         
     # Update belief map
@@ -62,10 +63,10 @@ print("\n*** Reached goal! ***")
 print("Number of plans: ", count_plans)
 print("Number of steps: ", len(P) - count_plans)
 
-plt.figure()
+plt.figure(3)
 plt.plot(P)
 
-E.plot(True, P)
+E.plot(path_map = True, P = P)
 
 
 # x = np.copy(x_start)
