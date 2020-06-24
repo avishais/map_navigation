@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 
 from rrt import RRT
 
-show_animation = True
+show_animation = False
 
 class RRTStar(RRT):
     """
@@ -23,25 +23,26 @@ class RRTStar(RRT):
     """
 
     class Node(RRT.Node):
-        def __init__(self, x, y):
-            super().__init__(x, y)
+        def __init__(self, x, y, idx = None):
+            super().__init__(x, y, idx)
             self.cost = 0.0
 
         def eq(self, node):
-            if self.x == node.x and self.y == node.y and self.parent is not None and node.parent is not None and self.parent.x == node.parent.x and self.parent.y == node.parent.y:
+            if self.x == node.x and self.y == node.y:# and self.parent is not None and node.parent is not None and self.parent.x == node.parent.x and self.parent.y == node.parent.y:
                 return True
             return False
 
-        def coord(self):
-            print("Position <%d,%d>, cost: %d."%(self.x,self.y, self.cost))
+        def coord(self, Str = []):
+            print(' Position <' + str(self.x) + ',' + str(self.y) + '>, index: ' + str(self.idx) + ', parent ' + str(self.parent) + ', cost: ' + str(self.cost) + '.')
+            # print("%s Position <%d,%d>, cost: %d, index: %d."%(Str, self.x, self.y, self.cost, self.idx))
 
     def __init__(self, Map,
                  expand_dis=1.0,
                  path_resolution=1.0,
                  goal_sample_rate=20,
-                 max_iter=10000,
+                 max_iter=20000,
                  connect_circle_dist=1.0,
-                 verbose = False
+                 verbose = True
                  ):
         super().__init__(Map, expand_dis, path_resolution, goal_sample_rate, max_iter)
         """
@@ -51,7 +52,7 @@ class RRTStar(RRT):
         goal:Goal Position [x,y]
         obstacleList:obstacle Positions [[x,y,size],...]
         """
-        self.set_cost_func()
+        self.set_g_func()
         self.connect_circle_dist = connect_circle_dist
         self.best_cost = np.Inf
         self.list_size = 0
@@ -65,7 +66,7 @@ class RRTStar(RRT):
         animation: flag for animation on or off
         search_until_max_iter: search until max iteration for path improving or not
         """
-        self.start = self.Node(start[0], start[1])
+        self.start = self.Node(start[0], start[1], idx = 0)
         self.end = self.Node(goal[0], goal[1])
         self.goal_node = self.Node(goal[0], goal[1])
         self.node_list = []
@@ -75,7 +76,7 @@ class RRTStar(RRT):
 
         self.node_list = [self.start]
         for i in range(self.max_iter):
-            
+
             if i % 100:
                 i_best_cost = self.search_best_goal_node() 
                 best_cost_so_far = self.node_list[i_best_cost].cost if i_best_cost is not None else np.Inf
@@ -87,8 +88,8 @@ class RRTStar(RRT):
                 elif best_cost_so_far is not np.Inf:
                     self.count_convrg += 1
 
-            if i % 1000 == 0:
-                self.rewire_all()
+            if self.count_convrg > 0 and self.count_convrg % 1000 == 0:# i % 1000 == 0:
+                self.rewire_all(prob = 1.0)
 
             if self.verbose:
                 print("Iter:", i, ", number of nodes:", len(self.node_list), ", best cost: ", self.best_cost+2)
@@ -96,29 +97,42 @@ class RRTStar(RRT):
             rnd = self.get_random_node()
             nearest_ind = self.get_nearest_node_index(self.node_list, rnd)
             new_node = self.steer(self.node_list[nearest_ind], rnd, self.expand_dis)
+            new_node.cost = self.calc_new_cost(self.node_list[nearest_ind], new_node)
 
             if self.check_collision(new_node):
+                i_exist = self.check_exist(new_node)
+                if i_exist is not None and i_exist != self.node_list[nearest_ind].parent and new_node.cost < self.node_list[i_exist].cost:
+                    new_node.idx = i_exist
+                    self.node_list[i_exist] = new_node
+                    self.propagate_cost_to_leaves(new_node)
+                    continue
+                elif i_exist is not None:
+                    continue
+
                 near_inds = self.find_near_nodes(new_node)
                 new_node = self.choose_parent(new_node, near_inds)
-                if new_node and not self.check_exist(new_node):
+                if new_node:
+                    new_node.idx = len(self.node_list)
                     self.node_list.append(new_node)
-                    self.rewire(new_node, near_inds, rewire_near = False)
-
+                    self.rewire(new_node, near_inds)
+                        
             if animation and i % 100 == 0:
                 last_index = self.search_best_goal_node()
                 if last_index:
                     sol = self.generate_final_course(last_index)
-                    self.draw_graph(rnd, path = sol['path'], stop = False)
+                    self.plot_plan(rnd, path = sol['path'], stop = False)
                 else:
-                    self.draw_graph(rnd)
+                    self.plot_plan(rnd)
 
-            if ((not search_until_max_iter) and new_node):# or self.count_convrg > 500:  # check reaching the goal
+            if ((not search_until_max_iter) and new_node) or self.count_convrg > 6000:  # check reaching the goal
+                self.rewire_all(prob = 1.0)
                 last_index = self.search_best_goal_node()
                 if last_index:
                     print("Found path with cost %f."%self.node_list[last_index].cost)
                     return self.generate_final_course(last_index)
 
         print("reached max iteration")
+        self.rewire_all(prob = 1.0)
 
         last_index = self.search_best_goal_node()
         if last_index:
@@ -129,7 +143,7 @@ class RRTStar(RRT):
 
     def choose_parent(self, new_node, near_inds):
         if not near_inds:
-            return None
+            return new_node
 
         # search nearest cost in near_inds
         costs = []
@@ -145,20 +159,19 @@ class RRTStar(RRT):
         if min_cost == float("inf"):
             print("There is no good path.(min_cost is inf)")
             return None
-
+        
         min_ind = near_inds[costs.index(min_cost)]
         new_node = self.steer(self.node_list[min_ind], new_node)
-        new_node.parent = self.node_list[min_ind]
+        new_node.parent = min_ind#self.node_list[min_ind]
         new_node.cost = min_cost
 
         return new_node
 
     def check_exist(self, new_node):
-        for n in self.node_list:
-            if new_node.eq(n) and new_node.cost == n.cost:
-                return True
-
-        return False
+        for i, n in enumerate(self.node_list):
+            if new_node.eq(n):# and new_node.cost == n.cost:
+                return i
+        return None
 
     def search_best_goal_node(self):
         dist_to_goal_list = [self.calc_dist_to_goal(n.x, n.y) for n in self.node_list]
@@ -178,20 +191,44 @@ class RRTStar(RRT):
         r = self.connect_circle_dist
         dist_list = [np.abs(node.x - new_node.x) + np.abs(node.y - new_node.y) for node in self.node_list]
         near_inds = [i for i, x in enumerate(dist_list) if x == r ]
+        near_inds = [i for i in near_inds if new_node.parent is not None and not (self.node_list[i].x == self.node_list[new_node.parent].x and self.node_list[i].y == self.node_list[new_node.parent].y)]
         return near_inds
 
-    def rewire(self, new_node, near_inds, rewire_near = False):
+    def rewire(self, new_node, near_inds):
         for i in near_inds:
             near_node = self.node_list[i]
             new_cost = self.calc_new_cost(new_node, near_node)
             improved_cost = new_cost < near_node.cost 
-
             if improved_cost:
-                self.node_list[i].parent = new_node
+                self.node_list[i].parent = new_node.idx
                 self.node_list[i].cost = new_cost
                 self.propagate_cost_to_leaves(new_node)
 
-    def rewire_all(self):
+    def check_connectivity(self, root_node):
+        print("Checking connectivity for: ")
+        root_node.coord()
+        path = []
+        i = 0
+        node = root_node
+        while node.parent is not None and i < 1000:
+            path.append([node.x, node.y])
+            node = self.node_list[node.parent]
+            i += 1
+
+        if node.parent is None:
+            print("Connected")
+            return True
+        self.plot_plan(rnd=root_node, path=path, stop = False)
+        print("Not connected")
+        return False
+
+
+    def check_node_parent(self, node, child_node):
+        if self.node_list[node.parent].x == child_node.x and self.node_list[node.parent].y == child_node.y:
+            return False
+        return True
+
+    def rewire_all(self, prob = 1.0):
         last_index = self.search_best_goal_node()
         if not last_index:
             return
@@ -199,7 +236,7 @@ class RRTStar(RRT):
         print("Rewiring all...")
 
         for i, node in enumerate(self.node_list):
-            if np.random.rand() < 1:
+            if np.random.rand() < prob:
                 near_inds = self.find_near_nodes(node)
                 try:
                     j = near_inds.index(i)
@@ -210,13 +247,13 @@ class RRTStar(RRT):
 
         last_index = self.search_best_goal_node()
         best_cost = self.node_list[last_index].cost 
-        print("Rewired all with cost from %d to %d."%(best_cost_so_far, best_cost))
+        print("Rewired all with cost from %f to %f."%(best_cost_so_far, best_cost))
 
     def cost(self, from_node, to_node):
         d, _ = self.calc_distance_and_angle(from_node, to_node)
         return d
 
-    def set_cost_func(self, cost_func = None):
+    def set_g_func(self, cost_func = None):
         if cost_func is None:
             self.cost_func = self.cost
         else:
@@ -227,11 +264,17 @@ class RRTStar(RRT):
         return from_node.cost + d
 
     def propagate_cost_to_leaves(self, parent_node):
+        # for node in self.node_list:
+        #     if node.parent is not None and self.node_list[node.parent] == parent_node:
+        #         node.cost = self.calc_new_cost(parent_node, node)
+        #         node = self.node_list[node.parent]
+        #         self.propagate_cost_to_leaves(node)
+        node = parent_node
+        while node.parent is not None:
+            node.cost = self.calc_new_cost(self.node_list[node.parent], node)
+            node = self.node_list[node.parent]
+            
 
-        for node in self.node_list:
-            if node.parent == parent_node:
-                node.cost = self.calc_new_cost(parent_node, node)
-                self.propagate_cost_to_leaves(node)
 
 
 def alt_cost(from_node, to_node):
@@ -266,7 +309,7 @@ def main():
 
     # Set Initial parameters
     rrt_star = RRTStar(Map=Map)
-    rrt_star.set_cost_func(alt_cost)
+    rrt_star.set_g_func(alt_cost)
     sol = rrt_star.plan(start=[0, 0], goal=[0,19], animation=show_animation)
     path = sol['path']
     actions = sol['actions']
@@ -280,7 +323,7 @@ def main():
         print("Length: ", len(path))
 
         # Draw final path
-        rrt_star.draw_graph(path = path)
+        rrt_star.plot_plan(path = path)
 
 
 if __name__ == '__main__':

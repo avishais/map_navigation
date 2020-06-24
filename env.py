@@ -1,28 +1,30 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from astar import Astar
 from scipy.stats import rv_discrete
 
+from astar import Astar
+from rrtstar import RRTStar
 
-class Env(Astar):
+
+class Env(RRTStar):
     num_obs = 5
-    D = {'u': np.array([-1,0]), 'd': np.array([1,0]), 'r': np.array([0,1]), 'l': np.array([0,-1]), 'f': np.array([0, 0])}
+    D = {'u': np.array([-1,0]), 'd': np.array([1,0]), 'r': np.array([0,1]), 'l': np.array([0,-1])}#, 'f': np.array([0, 0])}
     alpha = 1.0
 
     def __init__(self, nrows = 9, ncols = 9, loc = [0,0]):
-        super(Env, self).__init__()
         self.nrows, self.ncols = nrows, ncols
         self.num_free_cells = (ncols*nrows - self.num_obs)
         self.env = np.ones((self.nrows, self.ncols))
         self.prob_map = np.zeros((self.nrows, self.ncols)) + 1./self.num_free_cells
         self.obs_map = np.zeros((self.nrows, self.ncols))
-        self.score_map = np.zeros((self.nrows, self.ncols))
+        self.score_map = np.ones((self.nrows, self.ncols))
         self.path = []
         self.path.append(loc)
 
         self.set_obs()
-        self.Map = np.copy(self.obs_map)
+        # self.Map = np.copy(self.obs_map)
         self.directions = self.D
+        super(Env, self).__init__(Map = self.obs_map)
 
     def set_start_state(self, x):
         self.path = []
@@ -59,7 +61,8 @@ class Env(Astar):
                     self.score_map[x, y] = 100
                     continue
                 S = self.sense([x, y])
-                self.score_map[x, y] = -len(S)*2
+                if len(S) > 0:
+                    self.score_map[x, y] = 1./(len(S)+3)
         # self.set_score_map(self.score_map)
 
     def normalize_map(self):
@@ -142,6 +145,10 @@ class Env(Astar):
         self.alpha = np.maximum(self.get_max_prob(), 0.1)
         # print(self.score_map[x[0], x[1]], 1.0, self.alpha)
         return (1 - self.alpha) * self.score_map[x[0], x[1]] + self.alpha * 1.0
+
+    def cost_score(self, from_node, to_node):
+        self.alpha = 0.0#np.maximum(self.get_max_prob(), 0.1)
+        return (1 - self.alpha) * self.score_map[to_node.x, to_node.y] + self.alpha * 1.0
 
     def sample_state_distribution(self):
         np.random.seed()

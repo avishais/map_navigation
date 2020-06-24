@@ -4,11 +4,16 @@ from env import Env
 
 
 E = Env(30, 30)
-x_start = np.array([28,27])# E.gen_random_state()
-x_goal = np.array([3,2])# E.gen_random_state()
+x_start = np.array([28, 27])# E.gen_random_state()
+x_goal = np.array([3, 2])# E.gen_random_state()
 E.set_start_state(x_start)
-E.set_g_func(E.g_score)
+E.set_g_func(E.cost_score)
 # E.plot(True)
+
+sol = E.plan(x_start, x_goal)
+path = sol['path']
+E.plot_plan(path = path)
+exit(1)
 
 x_current = np.copy(x_start) # The real current state but unknown
 actions_prev = []
@@ -20,7 +25,7 @@ while not np.all(x_current == x_goal) or E.get_max_prob() < 1.0:
 
     # Plan from current belief
     x_belief = E.sample_state_distribution()
-    print("x_belief: ", x_belief)
+    print("x_belief: ", x_belief, "x_real: ", x_current)
     print("Planning...")
     sol = E.plan(x_belief, x_goal)
     count_plans += 1

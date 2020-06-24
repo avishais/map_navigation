@@ -28,13 +28,14 @@ class RRT:
         RRT Node
         """
 
-        def __init__(self, x, y):
+        def __init__(self, x, y, idx = None):
             self.x = x
             self.y = y
             self.path_x = []
             self.path_y = []
             self.parent = None
             self.parent_action = None
+            self.idx = idx
         
         def coord(self):
             print("Position <%d,%d>"%(self.x,self.y))
@@ -64,7 +65,7 @@ class RRT:
 
         animation: flag for animation on or off
         """
-        self.start = self.Node(start[0], start[1])
+        self.start = self.Node(start[0], start[1], idx = 0)
         self.end = self.Node(goal[0], goal[1])
         self.node_list = []
 
@@ -78,15 +79,16 @@ class RRT:
 
             if self.check_collision(new_node):
                 self.node_list.append(new_node)
+                self.node_list[-1].idx = len(self.node_list)-1
 
             if animation and i % 5 == 0:
-                self.draw_graph(rnd_node)
+                self.plot_plan(rnd_node)
 
             if self.node_list[-1].x == self.end.x and self.node_list[-1].y == self.end.y: 
                 return self.generate_final_course(len(self.node_list) - 1)
 
             if animation and i % 5:
-                self.draw_graph(rnd_node)
+                self.plot_plan(rnd_node)
 
         return None  # cannot find path
 
@@ -109,7 +111,7 @@ class RRT:
         new_node.x += self.directions[a][0]
         new_node.y += self.directions[a][1]
 
-        new_node.parent = from_node
+        new_node.parent = from_node.idx
         new_node.parent_action = a
 
         return new_node
@@ -121,7 +123,7 @@ class RRT:
         while node.parent is not None:
             path.append([node.x, node.y])
             action_path.append(node.parent_action)
-            node = node.parent
+            node = self.node_list[node.parent]
         path.append([node.x, node.y])
         action_path.append(node.parent_action)
         return {'path': path[::-1], 'actions': action_path[::-1][1:]}
@@ -139,7 +141,7 @@ class RRT:
             rnd = self.Node(self.end.x, self.end.y)
         return rnd
 
-    def draw_graph(self, rnd=None, path = None, stop = True):
+    def plot_plan(self, rnd=None, path = None, stop = True):
         row_labels = range(self.nrows)
         col_labels = range(self.ncols)
 
@@ -157,8 +159,8 @@ class RRT:
         if rnd is not None:
             plt.plot(rnd.y, rnd.x, "^r")
         for node in self.node_list:
-            if node.parent:
-                plt.plot([node.y, node.parent.y], [node.x, node.parent.x], "-g")
+            if node.parent is not None:
+                plt.plot([node.y, self.node_list[node.parent].y], [node.x, self.node_list[node.parent].x], "-g", linewidth = 3.0)
 
         plt.plot(self.start.y, self.start.x, 'pg')
         plt.plot(self.end.y, self.end.x, 'ob')
@@ -173,6 +175,8 @@ class RRT:
             plt.show()
         elif path is not None:
             plt.plot([y for (x, y) in path], [x for (x, y) in path], '-r')
+            plt.pause(0.01)
+        else:
             plt.pause(0.01)
 
     def check_collision(self, node):
@@ -200,7 +204,7 @@ class RRT:
     def get_nearest_node_index(node_list, rnd_node):
         dlist = [(node.x - rnd_node.x) ** 2 + (node.y - rnd_node.y)
                  ** 2 for node in node_list]
-        minind = dlist.index(min(dlist))
+        minind = dlist.index(min(dlist)) # !!!!
 
         return minind
 
@@ -225,8 +229,8 @@ def main():
         [0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 1],
+        [0, 0, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 1],
         [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0],
         [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0],
         [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0],
@@ -255,7 +259,7 @@ def main():
         print("found path!!")
 
         # Draw final path
-        rrt.draw_graph(path = path)
+        rrt.plot_plan(path = path)
 
 
 if __name__ == '__main__':
