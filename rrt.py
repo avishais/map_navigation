@@ -2,8 +2,6 @@
 
 Path planning Sample Code with Randomized Rapidly-Exploring Random Trees (RRT)
 
-author: AtsushiSakai(@Atsushi_twi)
-
 """
 
 import math
